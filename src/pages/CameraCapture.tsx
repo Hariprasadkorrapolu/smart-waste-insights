@@ -4,11 +4,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Camera, RotateCcw, Check, ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const MAX_WIDTH = 800;
 const QUALITY_HIGH = 0.6;
 const QUALITY_LOW = 0.4;
-const MAX_SIZE_BYTES = 300 * 1024; // 300KB
+const MAX_SIZE_BYTES = 300 * 1024;
 
 const CameraCapture: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +25,6 @@ const CameraCapture: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check form data exists
   useEffect(() => {
     const data = sessionStorage.getItem("wasteFormData");
     if (!data) {
@@ -44,7 +44,7 @@ const CameraCapture: React.FC = () => {
         videoRef.current.play();
         setStreaming(true);
       }
-    } catch (err) {
+    } catch {
       toast({ title: "Camera Error", description: "Unable to access camera. Please allow camera permissions.", variant: "destructive" });
     }
   }, [toast]);
@@ -64,14 +64,12 @@ const CameraCapture: React.FC = () => {
 
   const compressImage = useCallback((canvas: HTMLCanvasElement): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      // Try high quality first
       canvas.toBlob(
         (blob) => {
           if (!blob) return reject(new Error("Compression failed"));
           if (blob.size <= MAX_SIZE_BYTES) {
             resolve(blob);
           } else {
-            // Try lower quality
             canvas.toBlob(
               (lowBlob) => {
                 if (!lowBlob) return reject(new Error("Compression failed"));
@@ -94,8 +92,6 @@ const CameraCapture: React.FC = () => {
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
-
-    // Calculate resize
     const ratio = Math.min(MAX_WIDTH / video.videoWidth, 1);
     canvas.width = video.videoWidth * ratio;
     canvas.height = video.videoHeight * ratio;
@@ -112,7 +108,6 @@ const CameraCapture: React.FC = () => {
     } catch {
       toast({ title: "Error", description: "Image compression failed.", variant: "destructive" });
     }
-
     setIsCapturing(false);
   }, [compressImage, stopCamera, toast]);
 
@@ -126,23 +121,41 @@ const CameraCapture: React.FC = () => {
     if (!compressedBlob) return;
     setIsSubmitting(true);
 
-    // For now, store locally. Backend will be added with Lovable Cloud.
-    const formData = JSON.parse(sessionStorage.getItem("wasteFormData") || "{}");
-    const submission = {
-      ...formData,
-      photoSize: compressedSize,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const formData = JSON.parse(sessionStorage.getItem("wasteFormData") || "{}");
 
-    // Save to localStorage as temporary storage
-    const existing = JSON.parse(localStorage.getItem("wasteSubmissions") || "[]");
-    existing.push(submission);
-    localStorage.setItem("wasteSubmissions", JSON.stringify(existing));
+      // Upload photo to storage
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
+      const { error: uploadError } = await supabase.storage
+        .from("submission-photos")
+        .upload(fileName, compressedBlob, { contentType: "image/webp" });
 
-    sessionStorage.removeItem("wasteFormData");
+      if (uploadError) throw uploadError;
 
-    toast({ title: "Success!", description: "Your submission has been recorded." });
-    navigate("/success");
+      const { data: urlData } = supabase.storage
+        .from("submission-photos")
+        .getPublicUrl(fileName);
+
+      // Insert submission
+      const { error: insertError } = await supabase.from("submissions").insert({
+        name: formData.name,
+        address: formData.address,
+        gender: formData.gender,
+        age: Number(formData.age),
+        phone: formData.phone,
+        email: formData.email,
+        photo_url: urlData.publicUrl,
+      });
+
+      if (insertError) throw insertError;
+
+      sessionStorage.removeItem("wasteFormData");
+      toast({ title: "Success!", description: "Your submission has been recorded." });
+      navigate("/success");
+    } catch (err: any) {
+      toast({ title: "Submission Failed", description: err.message || "Something went wrong.", variant: "destructive" });
+    }
+
     setIsSubmitting(false);
   };
 
@@ -164,35 +177,16 @@ const CameraCapture: React.FC = () => {
         <h1 className="text-2xl font-display font-bold text-foreground mb-1">Capture Photo</h1>
         <p className="text-sm text-muted-foreground mb-6">Take a photo for your submission. Images are compressed automatically.</p>
 
-        {/* Camera / Preview */}
         <div className="relative rounded-2xl overflow-hidden bg-foreground/5 aspect-[4/3] mb-4">
           <AnimatePresence mode="wait">
             {capturedImage ? (
-              <motion.img
-                key="captured"
-                src={capturedImage}
-                alt="Captured"
-                className="w-full h-full object-cover"
-                initial={{ opacity: 0, scale: 1.05 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
-              />
+              <motion.img key="captured" src={capturedImage} alt="Captured" className="w-full h-full object-cover"
+                initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} />
             ) : (
-              <motion.video
-                key="video"
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-              />
+              <motion.video key="video" ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
             )}
           </AnimatePresence>
-
           {!capturedImage && streaming && (
             <div className="absolute inset-0 border-2 border-primary/30 rounded-2xl pointer-events-none" />
           )}
@@ -200,21 +194,14 @@ const CameraCapture: React.FC = () => {
 
         <canvas ref={canvasRef} className="hidden" />
 
-        {/* Compressed size info */}
         {compressedBlob && (
-          <motion.div
-            className="bg-secondary rounded-xl px-4 py-2 mb-4 flex items-center justify-between"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-          >
+          <motion.div className="bg-secondary rounded-xl px-4 py-2 mb-4 flex items-center justify-between"
+            initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
             <span className="text-sm text-secondary-foreground">Compressed Size</span>
-            <span className="text-sm font-semibold text-primary">
-              {(compressedSize / 1024).toFixed(1)} KB
-            </span>
+            <span className="text-sm font-semibold text-primary">{(compressedSize / 1024).toFixed(1)} KB</span>
           </motion.div>
         )}
 
-        {/* Actions */}
         <div className="flex gap-3">
           {capturedImage ? (
             <>
@@ -222,11 +209,7 @@ const CameraCapture: React.FC = () => {
                 <RotateCcw className="w-4 h-4 mr-2" /> Retake
               </Button>
               <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button
-                  onClick={handleConfirm}
-                  disabled={isSubmitting}
-                  className="w-full rounded-full py-5 font-display font-semibold shadow-soft"
-                >
+                <Button onClick={handleConfirm} disabled={isSubmitting} className="w-full rounded-full py-5 font-display font-semibold shadow-soft">
                   {isSubmitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
                   Confirm & Submit
                 </Button>
@@ -234,16 +217,8 @@ const CameraCapture: React.FC = () => {
             </>
           ) : (
             <motion.div className="flex-1" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button
-                onClick={capture}
-                disabled={!streaming || isCapturing}
-                className="w-full rounded-full py-5 font-display font-semibold shadow-soft"
-              >
-                {isCapturing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Camera className="w-4 h-4 mr-2" />
-                )}
+              <Button onClick={capture} disabled={!streaming || isCapturing} className="w-full rounded-full py-5 font-display font-semibold shadow-soft">
+                {isCapturing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Camera className="w-4 h-4 mr-2" />}
                 Capture
               </Button>
             </motion.div>

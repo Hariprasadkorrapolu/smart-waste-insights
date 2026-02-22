@@ -102,10 +102,16 @@ const Index: React.FC = () => {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border py-6 text-center">
+      <footer className="border-t border-border py-6 px-4 flex items-center justify-between max-w-4xl mx-auto w-full">
         <p className="text-sm text-muted-foreground">
-          © 2026 Smart Solid Waste Data Collection System. All rights reserved.
+          © 2026 Smart Solid Waste Data Collection System
         </p>
+        <button
+          onClick={() => navigate("/admin/login")}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          Admin
+        </button>
       </footer>
     </div>
   );

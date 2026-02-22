@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -18,15 +18,15 @@ const formSchema = z.object({
   email: z.string().trim().email("Enter a valid email address").max(255),
 });
 
-type FormData = z.infer<typeof formSchema>;
+export type WasteFormData = z.infer<typeof formSchema>;
 
 const SubmitForm: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [form, setForm] = useState<Partial<FormData>>({});
+  const [form, setForm] = useState<Partial<WasteFormData>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const update = (field: keyof FormData, value: string | number) => {
+  const update = (field: keyof WasteFormData, value: string | number) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => ({ ...prev, [field]: "" }));
   };
@@ -47,7 +47,6 @@ const SubmitForm: React.FC = () => {
       return;
     }
 
-    // Store form data in sessionStorage for camera page
     sessionStorage.setItem("wasteFormData", JSON.stringify(parsed.data));
     navigate("/capture");
   };
@@ -67,50 +66,27 @@ const SubmitForm: React.FC = () => {
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
-        <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-1">
-          Submit Your Details
-        </h1>
+        <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-1">Submit Your Details</h1>
         <p className="text-muted-foreground text-sm mb-8">Fill in the form below to register your waste collection data.</p>
 
         <div className="space-y-5">
-          {/* Name */}
           <div>
-            <Label htmlFor="name" className="flex items-center gap-2 mb-1.5">
-              <User className="w-4 h-4 text-primary" /> Full Name
-            </Label>
-            <Input
-              id="name"
-              placeholder="John Doe"
-              value={form.name || ""}
-              onChange={(e) => update("name", e.target.value)}
-              className={errors.name ? "border-destructive" : ""}
-            />
+            <Label htmlFor="name" className="flex items-center gap-2 mb-1.5"><User className="w-4 h-4 text-primary" /> Full Name</Label>
+            <Input id="name" placeholder="John Doe" value={form.name || ""} onChange={(e) => update("name", e.target.value)} className={errors.name ? "border-destructive" : ""} />
             {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
           </div>
 
-          {/* Address */}
           <div>
-            <Label htmlFor="address" className="flex items-center gap-2 mb-1.5">
-              <MapPin className="w-4 h-4 text-primary" /> Address
-            </Label>
-            <Input
-              id="address"
-              placeholder="123 Green Street, Eco City"
-              value={form.address || ""}
-              onChange={(e) => update("address", e.target.value)}
-              className={errors.address ? "border-destructive" : ""}
-            />
+            <Label htmlFor="address" className="flex items-center gap-2 mb-1.5"><MapPin className="w-4 h-4 text-primary" /> Address</Label>
+            <Input id="address" placeholder="123 Green Street, Eco City" value={form.address || ""} onChange={(e) => update("address", e.target.value)} className={errors.address ? "border-destructive" : ""} />
             {errors.address && <p className="text-xs text-destructive mt-1">{errors.address}</p>}
           </div>
 
-          {/* Gender & Age Row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="mb-1.5 block">Gender</Label>
               <Select onValueChange={(v) => update("gender", v)} value={form.gender || ""}>
-                <SelectTrigger className={errors.gender ? "border-destructive" : ""}>
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
+                <SelectTrigger className={errors.gender ? "border-destructive" : ""}><SelectValue placeholder="Select" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Male">Male</SelectItem>
                   <SelectItem value="Female">Female</SelectItem>
@@ -121,48 +97,20 @@ const SubmitForm: React.FC = () => {
             </div>
             <div>
               <Label htmlFor="age" className="mb-1.5 block">Age</Label>
-              <Input
-                id="age"
-                type="number"
-                placeholder="25"
-                min={1}
-                max={150}
-                value={form.age || ""}
-                onChange={(e) => update("age", e.target.value as any)}
-                className={errors.age ? "border-destructive" : ""}
-              />
+              <Input id="age" type="number" placeholder="25" min={1} max={150} value={form.age || ""} onChange={(e) => update("age", e.target.value as any)} className={errors.age ? "border-destructive" : ""} />
               {errors.age && <p className="text-xs text-destructive mt-1">{errors.age}</p>}
             </div>
           </div>
 
-          {/* Phone */}
           <div>
-            <Label htmlFor="phone" className="flex items-center gap-2 mb-1.5">
-              <Phone className="w-4 h-4 text-primary" /> Phone
-            </Label>
-            <Input
-              id="phone"
-              placeholder="+1 234 567 890"
-              value={form.phone || ""}
-              onChange={(e) => update("phone", e.target.value)}
-              className={errors.phone ? "border-destructive" : ""}
-            />
+            <Label htmlFor="phone" className="flex items-center gap-2 mb-1.5"><Phone className="w-4 h-4 text-primary" /> Phone</Label>
+            <Input id="phone" placeholder="+1 234 567 890" value={form.phone || ""} onChange={(e) => update("phone", e.target.value)} className={errors.phone ? "border-destructive" : ""} />
             {errors.phone && <p className="text-xs text-destructive mt-1">{errors.phone}</p>}
           </div>
 
-          {/* Email */}
           <div>
-            <Label htmlFor="email" className="flex items-center gap-2 mb-1.5">
-              <Mail className="w-4 h-4 text-primary" /> Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="john@example.com"
-              value={form.email || ""}
-              onChange={(e) => update("email", e.target.value)}
-              className={errors.email ? "border-destructive" : ""}
-            />
+            <Label htmlFor="email" className="flex items-center gap-2 mb-1.5"><Mail className="w-4 h-4 text-primary" /> Email</Label>
+            <Input id="email" type="email" placeholder="john@example.com" value={form.email || ""} onChange={(e) => update("email", e.target.value)} className={errors.email ? "border-destructive" : ""} />
             {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
           </div>
         </div>
